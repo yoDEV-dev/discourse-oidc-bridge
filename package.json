@@ -1,0 +1,19 @@
+{
+  "name": "discourse-oidc-bridge",
+  "version": "1.0.0",
+  "description": "Middleware to bridge Discourse SSO (DiscourseConnect) to OIDC for external apps",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "jose": "^5.2.0",
+    "uuid": "^9.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
