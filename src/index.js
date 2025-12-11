@@ -88,6 +88,7 @@ app.get('/.well-known/openid-configuration', (req, res) => {
     scopes_supported: ['openid', 'profile', 'email', 'offline_access'],
     token_endpoint_auth_methods_supported: ['client_secret_post', 'client_secret_basic'],
     claims_supported: ['sub', 'name', 'email', 'email_verified', 'picture', 'preferred_username'],
+    code_challenge_methods_supported: ['S256', 'plain'],
   });
 });
 
@@ -100,8 +101,8 @@ app.get('/.well-known/jwks.json', (req, res) => {
 
 // Authorization endpoint - redirects to Discourse
 app.get('/authorize', (req, res) => {
-  const { client_id, redirect_uri, response_type, scope, state } = req.query;
-  console.log('Authorize request:', JSON.stringify({ client_id, redirect_uri, response_type, scope, state }));
+  const { client_id, redirect_uri, response_type, scope, state, code_challenge, code_challenge_method } = req.query;
+  console.log('Authorize request:', JSON.stringify({ client_id, redirect_uri, response_type, scope, state, code_challenge, code_challenge_method }));
 
   // Validate client
   if (client_id !== config.clientId) {
@@ -119,6 +120,8 @@ app.get('/authorize', (req, res) => {
     redirect_uri,
     state,
     scope,
+    code_challenge,
+    code_challenge_method,
     created: Date.now(),
   });
 
@@ -155,6 +158,8 @@ app.get('/callback', async (req, res) => {
       user: userData,
       redirect_uri: pending.redirect_uri,
       scope: pending.scope,
+      code_challenge: pending.code_challenge,
+      code_challenge_method: pending.code_challenge_method,
       created: Date.now(),
     });
 
@@ -194,8 +199,9 @@ app.post('/token', async (req, res) => {
   code = req.body.code;
   grantType = req.body.grant_type;
   redirectUri = req.body.redirect_uri;
+  const codeVerifier = req.body.code_verifier;
 
-  console.log('Token request parsed:', { clientId, grantType, code: code?.substring(0, 8) + '...', redirectUri });
+  console.log('Token request parsed:', { clientId, grantType, code: code?.substring(0, 8) + '...', redirectUri, hasCodeVerifier: !!codeVerifier });
 
   // Validate client credentials
   if (clientId !== config.clientId || clientSecret !== config.clientSecret) {
@@ -215,6 +221,31 @@ app.post('/token', async (req, res) => {
   // Verify redirect URI matches
   if (redirectUri && redirectUri !== authCode.redirect_uri) {
     return res.status(400).json({ error: 'invalid_grant', error_description: 'Redirect URI mismatch' });
+  }
+
+  // Verify PKCE code_verifier if code_challenge was provided
+  if (authCode.code_challenge) {
+    if (!codeVerifier) {
+      return res.status(400).json({ error: 'invalid_grant', error_description: 'code_verifier required' });
+    }
+
+    // Compute the challenge from the verifier
+    let computedChallenge;
+    if (authCode.code_challenge_method === 'S256') {
+      computedChallenge = crypto
+        .createHash('sha256')
+        .update(codeVerifier)
+        .digest('base64url');
+    } else {
+      // plain method
+      computedChallenge = codeVerifier;
+    }
+
+    if (computedChallenge !== authCode.code_challenge) {
+      console.log('PKCE verification failed:', { expected: authCode.code_challenge, computed: computedChallenge });
+      return res.status(400).json({ error: 'invalid_grant', error_description: 'PKCE verification failed' });
+    }
+    console.log('PKCE verification successful');
   }
 
   authorizationCodes.delete(code);
