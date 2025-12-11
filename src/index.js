@@ -7,6 +7,12 @@ const app = express();
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
+// Request logging
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} ${req.method} ${req.path}`);
+  next();
+});
+
 // Configuration from environment
 const config = {
   port: process.env.PORT || 3000,
