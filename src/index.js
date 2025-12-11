@@ -255,6 +255,7 @@ app.post('/token', async (req, res) => {
   const user = authCode.user;
 
   // Generate ID token
+  console.log('Generating ID token with nonce:', authCode.oidcNonce);
   const idToken = await new SignJWT({
     sub: user.external_id || user.username,
     name: user.name || user.username,
