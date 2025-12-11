@@ -101,8 +101,8 @@ app.get('/.well-known/jwks.json', (req, res) => {
 
 // Authorization endpoint - redirects to Discourse
 app.get('/authorize', (req, res) => {
-  const { client_id, redirect_uri, response_type, scope, state, code_challenge, code_challenge_method } = req.query;
-  console.log('Authorize request:', JSON.stringify({ client_id, redirect_uri, response_type, scope, state, code_challenge, code_challenge_method }));
+  const { client_id, redirect_uri, response_type, scope, state, code_challenge, code_challenge_method, nonce: oidcNonce } = req.query;
+  console.log('Authorize request:', JSON.stringify({ client_id, redirect_uri, response_type, scope, state, code_challenge, code_challenge_method, oidcNonce }));
 
   // Validate client
   if (client_id !== config.clientId) {
@@ -114,20 +114,21 @@ app.get('/authorize', (req, res) => {
     return res.status(400).json({ error: 'invalid_redirect_uri' });
   }
 
-  // Generate nonce and store pending auth
-  const nonce = generateNonce();
-  pendingAuths.set(nonce, {
+  // Generate nonce for Discourse and store pending auth
+  const discourseNonce = generateNonce();
+  pendingAuths.set(discourseNonce, {
     redirect_uri,
     state,
     scope,
     code_challenge,
     code_challenge_method,
+    oidcNonce, // Store the OIDC nonce to include in ID token
     created: Date.now(),
   });
 
   // Build Discourse SSO request
   const returnUrl = `${config.baseUrl}/callback`;
-  const payload = `nonce=${nonce}&return_sso_url=${encodeURIComponent(returnUrl)}`;
+  const payload = `nonce=${discourseNonce}&return_sso_url=${encodeURIComponent(returnUrl)}`;
   const { sso, sig } = signPayload(payload);
 
   // Redirect to Discourse
@@ -160,6 +161,7 @@ app.get('/callback', async (req, res) => {
       scope: pending.scope,
       code_challenge: pending.code_challenge,
       code_challenge_method: pending.code_challenge_method,
+      oidcNonce: pending.oidcNonce, // Pass through for ID token
       created: Date.now(),
     });
 
@@ -260,6 +262,7 @@ app.post('/token', async (req, res) => {
     email_verified: true,
     preferred_username: user.username,
     picture: user.avatar_url,
+    nonce: authCode.oidcNonce, // Required by OIDC spec for implicit/hybrid flows
   })
     .setProtectedHeader({ alg: 'RS256', kid: jwk.kid })
     .setIssuer(config.baseUrl)
