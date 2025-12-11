@@ -271,10 +271,15 @@ app.post('/token', async (req, res) => {
     .setExpirationTime('1h')
     .sign(privateKey);
 
-  // Generate access token (simple signed JWT)
+  // Generate access token (simple signed JWT with user info for userinfo endpoint)
   const accessToken = await new SignJWT({
     sub: user.external_id || user.username,
     scope: authCode.scope || 'openid profile email',
+    email: user.email,
+    email_verified: true,
+    name: user.name || user.username,
+    preferred_username: user.username,
+    picture: user.avatar_url,
   })
     .setProtectedHeader({ alg: 'RS256', kid: jwk.kid })
     .setIssuer(config.baseUrl)
@@ -298,15 +303,20 @@ app.get('/userinfo', async (req, res) => {
     return res.status(401).json({ error: 'invalid_token' });
   }
 
-  // For simplicity, decode the access token to get user info
-  // In production, you'd want to verify the signature
+  // Decode the access token to get user info
   const token = authHeader.slice(7);
   try {
     const [, payloadBase64] = token.split('.');
     const payload = JSON.parse(Buffer.from(payloadBase64, 'base64url').toString());
 
+    // Return full userinfo - these fields are embedded in the access token
     res.json({
       sub: payload.sub,
+      email: payload.email,
+      email_verified: payload.email_verified,
+      name: payload.name,
+      preferred_username: payload.preferred_username,
+      picture: payload.picture,
     });
   } catch (error) {
     res.status(401).json({ error: 'invalid_token' });
