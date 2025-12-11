@@ -101,6 +101,7 @@ app.get('/.well-known/jwks.json', (req, res) => {
 // Authorization endpoint - redirects to Discourse
 app.get('/authorize', (req, res) => {
   const { client_id, redirect_uri, response_type, scope, state } = req.query;
+  console.log('Authorize request:', JSON.stringify({ client_id, redirect_uri, response_type, scope, state }));
 
   // Validate client
   if (client_id !== config.clientId) {
