@@ -138,9 +138,11 @@ app.get('/callback', async (req, res) => {
   try {
     // Verify and decode Discourse response
     const userData = verifyPayload(sso, sig);
+    console.log('Discourse user data:', JSON.stringify(userData));
 
     // Get pending auth
     const pending = pendingAuths.get(userData.nonce);
+    console.log('Pending auth for nonce:', userData.nonce, pending ? 'found' : 'NOT FOUND');
     if (!pending) {
       return res.status(400).send('Invalid or expired nonce');
     }
@@ -162,6 +164,7 @@ app.get('/callback', async (req, res) => {
       redirectUrl.searchParams.set('state', pending.state);
     }
 
+    console.log('Redirecting to:', redirectUrl.toString());
     res.redirect(redirectUrl.toString());
   } catch (error) {
     console.error('Callback error:', error);
@@ -171,6 +174,8 @@ app.get('/callback', async (req, res) => {
 
 // Token endpoint
 app.post('/token', async (req, res) => {
+  console.log('Token request body:', JSON.stringify(req.body));
+
   // Handle both form and JSON bodies, and Basic auth
   let clientId, clientSecret, code, grantType, redirectUri;
 
@@ -188,6 +193,8 @@ app.post('/token', async (req, res) => {
   code = req.body.code;
   grantType = req.body.grant_type;
   redirectUri = req.body.redirect_uri;
+
+  console.log('Token request parsed:', { clientId, grantType, code: code?.substring(0, 8) + '...', redirectUri });
 
   // Validate client credentials
   if (clientId !== config.clientId || clientSecret !== config.clientSecret) {
